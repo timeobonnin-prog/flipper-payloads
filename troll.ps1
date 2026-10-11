@@ -1,4 +1,4 @@
-$url = "https://i.imgur.com/IXL5WXD.jpeg"
+$url = "https://i.imgur.com/z1dQN2U.jpeg"
 $wp = "$env:TEMP\wp.jpg"
 
 Invoke-WebRequest -Uri $url -OutFile $wp -UseBasicParsing
